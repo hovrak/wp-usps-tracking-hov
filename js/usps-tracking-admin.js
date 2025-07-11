@@ -6,7 +6,6 @@ jQuery(document).ready(function($) {
     'use strict';
     
 
-    alert('USPS Tracking script loaded!'); // Remove this after testing
     console.log('USPS Tracking: JavaScript loaded');
     
     /**

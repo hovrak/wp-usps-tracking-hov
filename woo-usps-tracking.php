@@ -56,40 +56,6 @@ class WC_USPS_Tracking_Hov {
             return false;
         }
         
-        // Additional validation: Check for common USPS prefixes
-        $usps_prefixes = array(
-            '94001', '92055', '93033', '94073', '94016', '94018', '94019', '94020',
-            '94021', '94022', '94023', '94024', '94025', '94026', '94027', '94028',
-            '94029', '94030', '94031', '94032', '94033', '94034', '94035', '94036',
-            '94037', '94038', '94039', '94040', '94041', '94042', '94043', '94044',
-            '94045', '94046', '94047', '94048', '94049', '94050', '94051', '94052',
-            '94053', '94054', '94055', '94056', '94057', '94058', '94059', '94060',
-            '94061', '94062', '94063', '94064', '94065', '94066', '94067', '94068',
-            '94069', '94070', '94071', '94072', '94073', '94074', '94075', '94076',
-            '94077', '94078', '94079', '94080', '94081', '94082', '94083', '94084',
-            '94085', '94086', '94087', '94088', '94089', '94090', '94091', '94092',
-            '94093', '94094', '94095', '94096', '94097', '94098', '94099', '95001',
-            '95002', '95003', '95004', '95005', '95006', '95007', '95008', '95009',
-            '95010', '95011', '95012', '95013', '95014', '95015', '95016', '95017',
-            '95018', '95019', '95020', '95021', '95022', '95023', '95024', '95025',
-            '95026', '95027', '95028', '95029', '95030', '95031', '95032', '95033',
-            '95034', '95035', '95036', '95037', '95038', '95039', '95040', '95041',
-            '95042', '95043', '95044', '95045', '95046', '95047', '95048', '95049',
-            '95050', '95051', '95052', '95053', '95054', '95055', '95056', '95057',
-            '95058', '95059', '95060', '95061', '95062', '95063', '95064', '95065',
-            '95066', '95067', '95068', '95069', '95070', '95071', '95072', '95073',
-            '95074', '95075', '95076', '95077', '95078', '95079', '95080', '95081',
-            '95082', '95083', '95084', '95085', '95086', '95087', '95088', '95089',
-            '95090', '95091', '95092', '95093', '95094', '95095', '95096', '95097',
-            '95098', '95099'
-        );
-        
-        $prefix = substr( $tracking_number, 0, 5 );
-        if ( ! in_array( $prefix, $usps_prefixes, true ) ) {
-            // If it doesn't match known prefixes, still allow it but log for monitoring
-            $this->debug_log( 'Unknown USPS tracking prefix: ' . $prefix . ' for tracking number: ' . $tracking_number );
-        }
-        
         return true;
     }
     
@@ -106,51 +72,44 @@ class WC_USPS_Tracking_Hov {
      * Enqueue admin scripts and localize AJAX data
      */
     public function enqueue_admin_scripts( $hook ) {
-        // Only load on order edit pages
-        if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ) ) ) {
-            return;
-        }
-        
-        // Check if we're on an order edit page
-        global $post;
-        if ( ! $post || get_post_type( $post ) !== 'shop_order' ) {
-            return;
-        }
-        
-        // Enqueue our script
-        wp_enqueue_script(
-            'usps-tracking-admin',
-            plugin_dir_url( __FILE__ ) . 'js/usps-tracking-admin.js',
-            array( 'jquery' ),
-            '1.0.0',
-            true
-        );
-        
-        // Localize script with AJAX data
-        wp_localize_script(
-            'usps-tracking-admin',
-            'usps_ajax',
-            array(
-                'ajax_url' => admin_url( 'admin-ajax.php' ),
-                'nonce' => wp_create_nonce( 'usps_tracking_nonce' ),
-                'strings' => array(
-                    'confirm_delete' => __( 'Are you sure you want to delete this tracking number?', 'woo-usps-tracking' ),
-                    'enter_tracking' => __( 'Please enter a tracking number', 'woo-usps-tracking' ),
-                    'success_add' => __( 'Tracking number added successfully!', 'woo-usps-tracking' ),
-                    'success_delete' => __( 'Tracking number deleted successfully!', 'woo-usps-tracking' ),
-                    'error_unknown' => __( 'Unknown error occurred', 'woo-usps-tracking' ),
-                    'invalid_format' => __( 'Invalid USPS tracking number format. Please enter a valid 20-22 character tracking number.', 'woo-usps-tracking' ),
-                    'already_exists' => __( 'This tracking number already exists.', 'woo-usps-tracking' ),
-                    'error_adding' => __( 'Error adding tracking number. Please try again.', 'woo-usps-tracking' ),
-                    'error_deleting' => __( 'Error deleting tracking number. Please try again.', 'woo-usps-tracking' ),
-                    'bulk_processing' => __( 'Processing bulk tracking numbers...', 'woo-usps-tracking' ),
-                    'bulk_success' => __( 'Bulk operation completed successfully!', 'woo-usps-tracking' ),
-                    'bulk_error' => __( 'Error processing bulk tracking numbers. Please try again.', 'woo-usps-tracking' ),
-                    'no_tracking_numbers' => __( 'No tracking numbers added yet.', 'woo-usps-tracking' ),
-                    'delete' => __( 'Delete', 'woo-usps-tracking' )
+        $this->debug_log( 'enqueue_admin_scripts called with hook: ' . $hook );
+        $screen = get_current_screen();
+        $this->debug_log( 'Current screen ID: ' . ( $screen ? $screen->id : 'none' ) );
+        if ( $screen && in_array( $screen->id, array( 'shop_order', 'woocommerce_page_wc-orders' ) ) ) {
+            wp_enqueue_script(
+                'usps-tracking-admin',
+                plugin_dir_url( __FILE__ ) . 'js/usps-tracking-admin.js',
+                array( 'jquery' ),
+                '1.0.0',
+                true
+            );
+            
+            // Localize script with AJAX data
+            wp_localize_script(
+                'usps-tracking-admin',
+                'usps_ajax',
+                array(
+                    'ajax_url' => admin_url( 'admin-ajax.php' ),
+                    'nonce' => wp_create_nonce( 'usps_tracking_nonce' ),
+                    'strings' => array(
+                        'confirm_delete' => __( 'Are you sure you want to delete this tracking number?', 'woo-usps-tracking' ),
+                        'enter_tracking' => __( 'Please enter a tracking number', 'woo-usps-tracking' ),
+                        'success_add' => __( 'Tracking number added successfully!', 'woo-usps-tracking' ),
+                        'success_delete' => __( 'Tracking number deleted successfully!', 'woo-usps-tracking' ),
+                        'error_unknown' => __( 'Unknown error occurred', 'woo-usps-tracking' ),
+                        'invalid_format' => __( 'Invalid USPS tracking number format. Please enter a valid 20-22 character tracking number.', 'woo-usps-tracking' ),
+                        'already_exists' => __( 'This tracking number already exists.', 'woo-usps-tracking' ),
+                        'error_adding' => __( 'Error adding tracking number. Please try again.', 'woo-usps-tracking' ),
+                        'error_deleting' => __( 'Error deleting tracking number. Please try again.', 'woo-usps-tracking' ),
+                        'bulk_processing' => __( 'Processing bulk tracking numbers...', 'woo-usps-tracking' ),
+                        'bulk_success' => __( 'Bulk operation completed successfully!', 'woo-usps-tracking' ),
+                        'bulk_error' => __( 'Error processing bulk tracking numbers. Please try again.', 'woo-usps-tracking' ),
+                        'no_tracking_numbers' => __( 'No tracking numbers added yet.', 'woo-usps-tracking' ),
+                        'delete' => __( 'Delete', 'woo-usps-tracking' )
+                    )
                 )
-            )
-        );
+            );
+        }
     }
 
     /**
