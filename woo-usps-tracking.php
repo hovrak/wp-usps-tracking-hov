@@ -174,13 +174,6 @@ class WC_USPS_Tracking_Hov {
         echo '<button type="button" class="button" id="usps_add_tracking_button">' . esc_html__( 'Add', 'woo-usps-tracking' ) . '</button>';
         echo '</div>';
         
-        // Bulk tracking numbers input
-        echo '<div style="margin-bottom:1em;">';
-        echo '<label for="usps_bulk_tracking_input"><strong>' . esc_html__( 'Bulk Tracking Numbers:', 'woo-usps-tracking' ) . '</strong></label> ';
-        echo '<textarea id="usps_bulk_tracking_input" name="usps_bulk_tracking_numbers" style="width:100%; height:80px;" placeholder="' . esc_attr__( 'Paste multiple tracking numbers, one per line or separated by commas', 'woo-usps-tracking' ) . '"></textarea> ';
-        echo '<button type="button" class="button button-primary" id="usps_add_bulk_tracking_button">' . esc_html__( 'Add All', 'woo-usps-tracking' ) . '</button>';
-        echo '</div>';
-        
         echo '<p style="font-size:12px;color:#666;margin-top:0.5em;">' . esc_html__( 'Example: 9400100000000000000000', 'woo-usps-tracking' ) . '</p>';
         echo '</div>';
 
@@ -276,118 +269,6 @@ class WC_USPS_Tracking_Hov {
     }
 
     /**
-     * AJAX handler for adding multiple tracking numbers in bulk
-     */
-    public function ajax_add_bulk_tracking_numbers() {
-        $this->debug_log( 'ajax_add_bulk_tracking_numbers called' );
-        
-        // Log POST data for debugging
-        $this->debug_log( 'POST data: ' . print_r( $_POST, true ) );
-        
-        // Check if we have the required data
-        if ( ! isset( $_POST['order_id'] ) || ! isset( $_POST['tracking_numbers'] ) || ! isset( $_POST['nonce'] ) ) {
-            $this->debug_log( 'AJAX missing required POST data' );
-            wp_send_json_error( 'Missing required data' );
-        }
-        
-        // Check nonce
-        if ( ! wp_verify_nonce( $_POST['nonce'], 'usps_tracking_nonce' ) ) {
-            $this->debug_log( 'AJAX nonce verification failed' );
-            wp_send_json_error( 'Security check failed' );
-        }
-        
-        // Check permissions
-        if ( ! current_user_can( 'manage_woocommerce' ) ) {
-            $this->debug_log( 'AJAX user does not have manage_woocommerce capability' );
-            wp_die( 'Insufficient permissions' );
-        }
-        
-        $order_id = intval( $_POST['order_id'] );
-        $tracking_numbers_raw = sanitize_textarea_field( $_POST['tracking_numbers'] );
-        
-        $this->debug_log( 'AJAX adding bulk tracking numbers to order: ' . $order_id );
-        
-        if ( empty( $tracking_numbers_raw ) ) {
-            $this->debug_log( 'AJAX bulk tracking numbers is empty' );
-            wp_send_json_error( __( 'Please enter at least one tracking number.', 'woo-usps-tracking' ) );
-        }
-        
-        // Parse tracking numbers (split by newlines, commas, or spaces)
-        $tracking_numbers_array = preg_split( '/[\r\n,,\s]+/', $tracking_numbers_raw );
-        $tracking_numbers_array = array_filter( array_map( 'trim', $tracking_numbers_array ) );
-        
-        if ( empty( $tracking_numbers_array ) ) {
-            $this->debug_log( 'AJAX no valid tracking numbers found after parsing' );
-            wp_send_json_error( __( 'No valid tracking numbers found. Please check your input.', 'woo-usps-tracking' ) );
-        }
-        
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
-            $this->debug_log( 'AJAX could not get order: ' . $order_id );
-            wp_send_json_error( 'Order not found' );
-        }
-        
-        $existing_tracking_numbers = $order->get_meta( '_usps_tracking_numbers' );
-        if ( ! is_array( $existing_tracking_numbers ) ) {
-            $existing_tracking_numbers = array();
-        }
-        
-        $added_count = 0;
-        $skipped_count = 0;
-        $invalid_count = 0;
-        $errors = array();
-        
-        foreach ( $tracking_numbers_array as $tracking_number ) {
-            $tracking_number = trim( $tracking_number );
-            
-            // Skip empty entries
-            if ( empty( $tracking_number ) ) {
-                continue;
-            }
-            
-            // Validate tracking number format
-            if ( ! $this->validate_tracking_number( $tracking_number ) ) {
-                $invalid_count++;
-                $errors[] = sprintf( __( 'Invalid format: %s', 'woo-usps-tracking' ), $tracking_number );
-                continue;
-            }
-            
-            // Check if already exists
-            if ( in_array( $tracking_number, $existing_tracking_numbers, true ) ) {
-                $skipped_count++;
-                $errors[] = sprintf( __( 'Already exists: %s', 'woo-usps-tracking' ), $tracking_number );
-                continue;
-            }
-            
-            // Add to existing array
-            $existing_tracking_numbers[] = $tracking_number;
-            $added_count++;
-        }
-        
-        // Save updated tracking numbers
-        $order->update_meta_data( '_usps_tracking_numbers', $existing_tracking_numbers );
-        $order->save();
-        
-        $this->debug_log( 'AJAX bulk operation complete. Added: ' . $added_count . ', Skipped: ' . $skipped_count . ', Invalid: ' . $invalid_count );
-        
-        // Prepare response message
-        $message = sprintf( 
-            __( 'Bulk operation complete. Added: %d, Skipped: %d, Invalid: %d', 'woo-usps-tracking' ),
-            $added_count,
-            $skipped_count,
-            $invalid_count
-        );
-        
-        wp_send_json_success( array(
-            'message' => $message,
-            'added' => $added_count,
-            'skipped' => $skipped_count,
-            'invalid' => $invalid_count,
-            'errors' => $errors
-        ) );
-    }
-
-    /**
      * AJAX handler for deleting tracking numbers
      */
     public function ajax_delete_tracking_number() {
@@ -440,11 +321,8 @@ class WC_USPS_Tracking_Hov {
         
         // Register AJAX handlers
         add_action( 'wp_ajax_usps_tracking_add_number', array( $this, 'ajax_add_tracking_number' ) );
-        add_action( 'wp_ajax_usps_tracking_add_bulk_numbers', array( $this, 'ajax_add_bulk_tracking_numbers' ) );
         add_action( 'wp_ajax_usps_tracking_delete_number', array( $this, 'ajax_delete_tracking_number' ) );
-        
-        $this->debug_log( 'AJAX handlers registered: wp_ajax_usps_tracking_add_number, wp_ajax_usps_tracking_delete_number' );
-        
+                
         // Debug: Check if actions are actually registered
         global $wp_filter;
         if ( isset( $wp_filter['wp_ajax_usps_tracking_add_number'] ) ) {

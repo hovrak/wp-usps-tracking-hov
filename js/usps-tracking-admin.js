@@ -5,9 +5,6 @@
 jQuery(document).ready(function($) {
     'use strict';
     
-
-    console.log('USPS Tracking: JavaScript loaded');
-    
     /**
      * Show WordPress admin notice
      * @param {string} message - The message to display
