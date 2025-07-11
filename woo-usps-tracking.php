@@ -135,59 +135,20 @@ class WC_USPS_Tracking_Hov {
     }
 
     /**
-     * Render the USPS Tracking meta box (HPOS compatible).
+     * Render the USPS Tracking numbers list (for AJAX refresh)
      */
-    public function render_usps_tracking_meta_box_hov( $post_or_order_object ) {
-        $this->debug_log( 'render_usps_tracking_meta_box_hov called' );
-        
-        $order = $post_or_order_object;
-        if ( ! $order ) {
-            $this->debug_log( 'Order not found' );
-            echo esc_html__( 'Order not found.', 'woo-usps-tracking' );
-            return;
-        }
-        
-        $this->debug_log( 'Order ID: ' . $order->get_id() );
-
-        // Add hidden input for order ID (used by external JavaScript)
-        echo '<input type="hidden" id="post_ID" value="' . $order->get_id() . '" />';
-
-        // Get existing tracking numbers (array)
+    public function render_usps_tracking_numbers_list_hov( $order ) {
         $tracking_numbers = $order->get_meta( '_usps_tracking_numbers' );
-        $this->debug_log( 'Raw tracking numbers: ' . print_r( $tracking_numbers, true ) );
-        
         if ( ! is_array( $tracking_numbers ) ) {
-            $this->debug_log( 'Tracking numbers is not array, converting to empty array' );
             $tracking_numbers = array();
         }
-        
-        $this->debug_log( 'Final tracking numbers count: ' . count( $tracking_numbers ) );
-
-        // Add tracking number input with bulk operations
-        echo '<div style="margin-bottom:1em;">';
-        echo '<h4 style="margin-bottom:0.5em;">' . esc_html__( 'Add USPS Tracking Numbers:', 'woo-usps-tracking' ) . '</h4>';
-        
-        // Single tracking number input
-        echo '<div style="margin-bottom:1em;">';
-        echo '<label for="usps_tracking_number_input"><strong>' . esc_html__( 'Single Tracking Number:', 'woo-usps-tracking' ) . '</strong></label> ';
-        echo '<input type="text" id="usps_tracking_number_input" name="usps_tracking_number" style="width:250px;" placeholder="Enter USPS tracking number" /> ';
-        echo '<button type="button" class="button" id="usps_add_tracking_button">' . esc_html__( 'Add', 'woo-usps-tracking' ) . '</button>';
-        echo '</div>';
-        
-        echo '<p style="font-size:12px;color:#666;margin-top:0.5em;">' . esc_html__( 'Example: 9400100000000000000000', 'woo-usps-tracking' ) . '</p>';
-        echo '</div>';
-
-        // List tracking numbers
-        echo '<div style="margin-top:1em;">';
+        echo '<div id="usps-tracking-numbers-list">';
         echo '<h4 style="margin-bottom:0.5em;">' . esc_html__( 'Current Tracking Numbers:', 'woo-usps-tracking' ) . '</h4>';
-        
         if ( empty( $tracking_numbers ) ) {
             echo '<p style="color:#666;font-style:italic;">' . esc_html__( 'No tracking numbers added yet.', 'woo-usps-tracking' ) . '</p>';
-            $this->debug_log( 'No tracking numbers to display' );
         } else {
             echo '<ul style="list-style:disc inside;">';
             foreach ( $tracking_numbers as $i => $number ) {
-                $this->debug_log( 'Displaying tracking number: ' . $number );
                 $url = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=' . urlencode( $number );
                 echo '<li>';
                 echo '<a href="' . esc_url( $url ) . '" target="_blank" rel="noopener">' . esc_html( $number ) . '</a> ';
@@ -197,7 +158,34 @@ class WC_USPS_Tracking_Hov {
             echo '</ul>';
         }
         echo '</div>';
-        
+    }
+
+    /**
+     * Render the USPS Tracking meta box (HPOS compatible).
+     */
+    public function render_usps_tracking_meta_box_hov( $post_or_order_object ) {
+        $this->debug_log( 'render_usps_tracking_meta_box_hov called' );
+        $order = $post_or_order_object;
+        if ( ! $order ) {
+            $this->debug_log( 'Order not found' );
+            echo esc_html__( 'Order not found.', 'woo-usps-tracking' );
+            return;
+        }
+        $this->debug_log( 'Order ID: ' . $order->get_id() );
+        // Add hidden input for order ID (used by external JavaScript)
+        echo '<input type="hidden" id="post_ID" value="' . $order->get_id() . '" />';
+        // Add tracking number input (single only)
+        echo '<div style="margin-bottom:1em;">';
+        echo '<h4 style="margin-bottom:0.5em;">' . esc_html__( 'Add USPS Tracking Number:', 'woo-usps-tracking' ) . '</h4>';
+        echo '<div style="margin-bottom:1em;">';
+        echo '<label for="usps_tracking_number_input"><strong>' . esc_html__( 'Tracking Number:', 'woo-usps-tracking' ) . '</strong></label> ';
+        echo '<input type="text" id="usps_tracking_number_input" name="usps_tracking_number" style="width:250px;" placeholder="Enter USPS tracking number" /> ';
+        echo '<button type="button" class="button" id="usps_add_tracking_button">' . esc_html__( 'Add', 'woo-usps-tracking' ) . '</button>';
+        echo '</div>';
+        echo '<p style="font-size:12px;color:#666;margin-top:0.5em;">' . esc_html__( 'Example: 9400100000000000000000', 'woo-usps-tracking' ) . '</p>';
+        echo '</div>';
+        // Render the tracking numbers list (now in a separate method)
+        $this->render_usps_tracking_numbers_list_hov( $order );
         $this->debug_log( 'Meta box render complete' );
     }
 
@@ -316,12 +304,37 @@ class WC_USPS_Tracking_Hov {
         wp_send_json_success( 'Tracking number deleted successfully' );
     }
 
+    /**
+     * AJAX handler to return the tracking numbers list HTML for a given order
+     */
+    public function ajax_get_tracking_numbers_html() {
+        if ( ! isset( $_POST['order_id'] ) || ! isset( $_POST['nonce'] ) ) {
+            wp_send_json_error( 'Missing required data' );
+        }
+        if ( ! wp_verify_nonce( $_POST['nonce'], 'usps_tracking_nonce' ) ) {
+            wp_send_json_error( 'Security check failed' );
+        }
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( 'Insufficient permissions' );
+        }
+        $order_id = intval( $_POST['order_id'] );
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            wp_send_json_error( 'Order not found' );
+        }
+        ob_start();
+        $this->render_usps_tracking_numbers_list_hov( $order );
+        $html = ob_get_clean();
+        wp_send_json_success( $html );
+    }
+
     public function register_handlers() {
         $this->debug_log( 'Registering handlers' );
         
         // Register AJAX handlers
         add_action( 'wp_ajax_usps_tracking_add_number', array( $this, 'ajax_add_tracking_number' ) );
         add_action( 'wp_ajax_usps_tracking_delete_number', array( $this, 'ajax_delete_tracking_number' ) );
+        add_action( 'wp_ajax_usps_tracking_get_numbers_html', array( $this, 'ajax_get_tracking_numbers_html' ) );
                 
         // Debug: Check if actions are actually registered
         global $wp_filter;

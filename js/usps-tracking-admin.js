@@ -37,7 +37,22 @@ jQuery(document).ready(function($) {
         }
     }
     
-
+    /**
+     * Helper to refresh the tracking numbers list div via AJAX
+     */
+    function refreshTrackingNumbersList() {
+        var orderId = $('#post_ID').val();
+        $.post(usps_ajax.ajax_url, {
+            action: 'usps_tracking_get_numbers_html',
+            order_id: orderId,
+            nonce: usps_ajax.nonce
+        }, function(response) {
+            if (response.success && response.data) {
+                $('#usps-tracking-numbers-list').replaceWith(response.data);
+            }
+        });
+    }
+    
     
     // Handle Add button click
     $('#usps_add_tracking_button').on('click', function(e) {
@@ -95,114 +110,14 @@ jQuery(document).ready(function($) {
                     showAdminNotice(response.data.message || usps_ajax.strings.success_add, 'success');
                     // Clear the input field
                     $('#usps_tracking_number_input').val('');
-                    // Update the tracking numbers list directly with returned data
-                    if (response.data.html) {
-                        $('.usps-tracking-numbers-list').html(response.data.html);
-                    }
+                    // Refresh the tracking numbers list
+                    refreshTrackingNumbersList();
                 } else {
                     showAdminNotice('Error: ' + (response.data || usps_ajax.strings.error_unknown), 'error');
                 }
             },
             error: function(xhr, status, error) {
                 console.error('USPS Tracking: AJAX error:', error);
-                var errorMessage = usps_ajax.strings.error_unknown;
-                
-                if (status === 'timeout') {
-                    errorMessage = usps_ajax.strings.error_timeout;
-                } else if (status === 'error') {
-                    if (xhr.status === 403) {
-                        errorMessage = usps_ajax.strings.error_permission;
-                    } else if (xhr.status === 404) {
-                        errorMessage = usps_ajax.strings.error_order_not_found;
-                    } else if (xhr.status >= 500) {
-                        errorMessage = usps_ajax.strings.error_server;
-                    } else if (xhr.status === 0) {
-                        errorMessage = usps_ajax.strings.error_network;
-                    }
-                }
-                
-                showAdminNotice('Error: ' + errorMessage, 'error');
-            },
-            complete: function() {
-                // Restore button state
-                $button.prop('disabled', false).text(originalText);
-            }
-        });
-    });
-    
-    // Handle Bulk Add button click
-    $('#usps_add_bulk_tracking_button').on('click', function(e) {
-        e.preventDefault();
-        console.log('USPS Tracking: Bulk Add button clicked');
-        
-        var bulkInput = $('#usps_bulk_tracking_input');
-        var trackingNumbers = bulkInput.val().trim();
-        
-        if (!trackingNumbers) {
-            showAdminNotice(usps_ajax.strings.validation_empty, 'error');
-            bulkInput.focus();
-            return;
-        }
-        
-        // Count tracking numbers for better feedback
-        var trackingArray = trackingNumbers.split(/[\r\n,,\s]+/).filter(function(item) {
-            return item.trim().length > 0;
-        });
-        
-        if (trackingArray.length === 0) {
-            showAdminNotice(usps_ajax.strings.validation_empty, 'error');
-            bulkInput.focus();
-            return;
-        }
-        
-        // Show processing info
-        showAdminNotice(usps_ajax.strings.info_bulk_processing.replace('%d', trackingArray.length), 'info');
-        
-        var $button = $(this);
-        var originalText = $button.text();
-        
-        // Show loading state
-        $button.prop('disabled', true).text(usps_ajax.strings.loading_bulk);
-        
-        console.log('USPS Tracking: Processing bulk tracking numbers');
-        
-        // Show processing notice
-        showAdminNotice(usps_ajax.strings.bulk_processing, 'info');
-        
-        // Create form data
-        var formData = new FormData();
-        formData.append('action', 'usps_tracking_add_bulk_numbers');
-        formData.append('order_id', $('#post_ID').val());
-        formData.append('tracking_numbers', trackingNumbers);
-        formData.append('nonce', usps_ajax.nonce);
-        
-        // Send AJAX request
-        $.ajax({
-            url: usps_ajax.ajax_url,
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                console.log('USPS Tracking: Bulk AJAX response:', response);
-                if (response.success) {
-                    var message = response.data.message;
-                    if (response.data.errors && response.data.errors.length > 0) {
-                        message += '<br><br><strong>Details:</strong><br>' + response.data.errors.join('<br>');
-                    }
-                    showAdminNotice(message, 'success');
-                    // Clear the bulk input field
-                    $('#usps_bulk_tracking_input').val('');
-                    // Update the tracking numbers list directly with returned data
-                    if (response.data.html) {
-                        $('.usps-tracking-numbers-list').html(response.data.html);
-                    }
-                } else {
-                    showAdminNotice('Error: ' + (response.data || usps_ajax.strings.error_unknown), 'error');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('USPS Tracking: Bulk AJAX error:', error);
                 var errorMessage = usps_ajax.strings.error_unknown;
                 
                 if (status === 'timeout') {
@@ -263,10 +178,8 @@ jQuery(document).ready(function($) {
                 console.log('USPS Tracking: AJAX response:', response);
                 if (response.success) {
                     showAdminNotice(response.data.message || usps_ajax.strings.success_delete, 'success');
-                    // Update the tracking numbers list directly with returned data
-                    if (response.data.html) {
-                        $('.usps-tracking-numbers-list').html(response.data.html);
-                    }
+                    // Refresh the tracking numbers list
+                    refreshTrackingNumbersList();
                 } else {
                     showAdminNotice('Error: ' + (response.data || usps_ajax.strings.error_unknown), 'error');
                 }
